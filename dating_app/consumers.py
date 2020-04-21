@@ -5,6 +5,7 @@ from channels.generic.websocket import WebsocketConsumer
 from django.contrib.auth import get_user_model
 
 from .models import Message
+from .views import get_user_contact, get_current_chat, get_last_10_messages
 
 User = get_user_model()
 
@@ -12,7 +13,7 @@ User = get_user_model()
 class ChatConsumer(WebsocketConsumer):
 
     def fetch_messages(self, data):
-        messages = Message.last_10_messages()
+        messages = get_last_10_messages(data['chatId'])
         content = {
             'command': 'messages',
             'messages': self.messages_to_json(messages),
@@ -20,7 +21,7 @@ class ChatConsumer(WebsocketConsumer):
         self.send_message(content)
 
     def new_message(self, data):
-        sender = data['from']
+        sender = get_user_contact(data['from'])
         sender_user = User.objects.filter(username=sender)[0]
         message = Message.objects.create(
             sender=sender_user,
@@ -28,6 +29,14 @@ class ChatConsumer(WebsocketConsumer):
         content = {
             'command': 'new_message',
             'message': self.message_to_json(message),
+        }
+
+        current_chat = get_current_chat(data['chatId'])
+        current_chat.messages.add(message)
+        current_chat.save()
+        content = {
+            'command': 'new_message',
+            'message': self.message_to_json(message)
         }
         return self.send_chat_message(content)
 
